@@ -3,6 +3,7 @@ from urllib.request import urlretrieve
 import os
 import json
 from datetime import datetime
+from loguru import logger
 
 _DEFAULT_TIME = datetime.min
 
@@ -62,7 +63,7 @@ class ArXivFetcher:
 
         for r in results:
             local_path = os.path.join(self.download_dir, f"{r.title}.pdf")
-            print(f"Downloading {local_path}...", end="")
+            logger.debug(f"Downloading {local_path}...", end="")
             new_data.append(
                 ArXivResult(
                     entry_id=r.entry_id,
@@ -78,7 +79,7 @@ class ArXivFetcher:
             )
             if r.pdf_url:
                 urlretrieve(r.pdf_url, local_path)
-            print("Completed.")
+            logger.debug("Completed.")
 
         try:
             with open(
@@ -86,7 +87,7 @@ class ArXivFetcher:
             ) as fp:
                 old_data = json.load(fp)
         except:
-            print(f"Error Opening the papers_metadata.json")
+            logger.error(f"Error Opening the papers_metadata.json")
 
         old_data.extend(new_data)
 

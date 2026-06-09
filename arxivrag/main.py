@@ -1,4 +1,5 @@
 from ingestion import ArXivFetcher, ArXivResult
+from parser import PDFparser
 
 if __name__ == "__main__":
     arxivFetcher = ArXivFetcher()
@@ -16,3 +17,7 @@ if __name__ == "__main__":
         print(f"Following papers fetched for query: {q}")
         for i, r in enumerate(results):
             print(f"{i}. {r.title}")
+
+    pdfParser = PDFparser()
+
+    pdfParser.parse_dir()
