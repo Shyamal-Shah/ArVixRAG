@@ -32,3 +32,27 @@ ArVixRAG is a Retrieval-Augmented Generation (RAG) system designed to provide ac
    ```
    cp .env.example .env
    ```
+
+## Folder Structure
+
+```css
+arxivrag/
+├── README.md
+├── requirements.txt
+├── .gitignore
+├── .env                  # API keys — gitignored
+├── data/
+│   ├── papers/           # downloaded PDFs
+│   ├── text/             # extracted .txt
+│   └── metadata.json     # paper_id, title, ...
+├── src/
+│   ├── ingest.py         # fetch + parse PDFs
+│   ├── chunk.py          # chunking logic
+│   ├── db.py             # pgvector connection
+│   ├── embed.py          # embed + store
+│   └── retrieve.py       # retrieval + answer
+├── evals/
+│   ├── golden_dataset.json
+│   └── run_ragas.py      # evaluate RAGAS on golden dataset
+└── results/              # RAGAS output
+```
