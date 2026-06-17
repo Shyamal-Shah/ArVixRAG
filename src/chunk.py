@@ -3,7 +3,10 @@ import json
 from loguru import logger
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from models import Paper, Chunk
+try:
+    from .models import Paper, Chunk
+except ImportError:
+    from models import Paper, Chunk
 
 
 class TextChunker:

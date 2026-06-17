@@ -2,12 +2,18 @@ from pathlib import Path
 import json
 import os
 from loguru import logger
-from models import Chunk
+try:
+    from .models import Chunk
+except ImportError:
+    from models import Chunk
 import requests
 import asyncio
 from dotenv import load_dotenv
 
-from db import PGVectorDB
+try:
+    from .db import PGVectorDB
+except ImportError:
+    from db import PGVectorDB
 
 load_dotenv()
 
@@ -88,42 +94,49 @@ class TextEmbedder:
         provider = os.getenv("EMBEDDING_PROVIDER", "OLLAMA").upper()
         logger.info(f"Embedding {len(chunks)} chunks using {provider}...")
 
-        embeddings_list = []
-        batch_size = 100
-        for batch_start in range(0, len(contents), batch_size):
-            batch = contents[batch_start : batch_start + batch_size]
-            logger.debug(f"Embedding batch {batch_start // batch_size + 1} ({len(batch)} chunks)...")
-            if provider == "OPENAI":
-                embeddings_list.extend(self.openai_embed(batch))
-            elif provider == "OPENROUTER":
-                embeddings_list.extend(self.open_router_embed(batch))
-            else:
-                embeddings_list.extend(self.ollama_embed(batch))
-
-        for chunk, embedding in zip(chunks, embeddings_list):
-            chunk.embeddings = embedding
-        logger.info(f"Embedded {len(chunks)} chunks")
-
         db = await PGVectorDB.create()
-        async with db.get_db() as conn:
-            await conn.executemany(
-                """
-                INSERT INTO papers(arxiv_id, title, chunk_index, content, embedding)
-                VALUES($1, $2, $3, $4, $5)
-                """,
-                [
-                    (
-                        sanitize_text(c.arxiv_id),
-                        sanitize_text(c.paper_title),
-                        c.chunk_index,
-                        sanitize_text(c.content),
-                        c.embeddings,
-                    )
-                    for c in chunks
-                ],
+
+        batch_size = 100
+        for batch_start in range(0, len(chunks), batch_size):
+            batch_chunks = chunks[batch_start : batch_start + batch_size]
+            batch_contents = contents[batch_start : batch_start + batch_size]
+            logger.debug(
+                f"Embedding batch {batch_start // batch_size + 1} ({len(batch_chunks)} chunks)..."
             )
+
+            if provider == "OPENAI":
+                embeddings_list = self.openai_embed(batch_contents)
+            elif provider == "OPENROUTER":
+                embeddings_list = self.open_router_embed(batch_contents)
+            else:
+                embeddings_list = self.ollama_embed(batch_contents)
+
+            for chunk, embedding in zip(batch_chunks, embeddings_list):
+                chunk.embeddings = embedding
+
+            async with db.get_db() as conn:
+                await conn.executemany(
+                    """
+                    INSERT INTO papers(arxiv_id, title, chunk_index, content, embedding)
+                    VALUES($1, $2, $3, $4, $5)
+                    ON CONFLICT (arxiv_id, chunk_index) DO NOTHING
+                    """,
+                    [
+                        (
+                            sanitize_text(c.arxiv_id),
+                            sanitize_text(c.paper_title),
+                            c.chunk_index,
+                            sanitize_text(c.content),
+                            c.embeddings,
+                        )
+                        for c in batch_chunks
+                    ],
+                )
+                logger.info(f"Inserted batch ending at chunk {batch_start + len(batch_chunks)}")
+
+        async with db.get_db() as conn:
             count = await conn.fetchval("SELECT COUNT(*) FROM papers")
-            logger.info(f"Successfully inserted {count} rows into db")
+            logger.info(f"Total rows in db: {count}")
 
         await db.close()
 

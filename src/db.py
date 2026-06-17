@@ -72,7 +72,8 @@ class PGVectorDB:
                     chunk_index INTEGER,
                     content TEXT,
                     embedding vector(1024),
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (arxiv_id, chunk_index)
                 )
             """)
 

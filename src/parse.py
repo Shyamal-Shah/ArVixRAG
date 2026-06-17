@@ -3,8 +3,12 @@ import json
 from loguru import logger
 import pymupdf
 
-from models import Paper
-from clean import clean_text
+try:
+    from .models import Paper
+    from .clean import clean_text
+except ImportError:
+    from models import Paper
+    from clean import clean_text
 
 
 class PaperParser:

@@ -7,8 +7,12 @@ import requests
 
 dotenv.load_dotenv()
 
-from embed import TextEmbedder
-from db import PGVectorDB
+try:
+    from .embed import TextEmbedder
+    from .db import PGVectorDB
+except ImportError:
+    from embed import TextEmbedder
+    from db import PGVectorDB
 
 
 class Retriever:
@@ -121,7 +125,16 @@ class Retriever:
         return {
             "question": question,
             "answer": answer,
-            "chunks": [{k: v for k, v in dict(c).items() if k != "embedding"} for c in chunks],
+            "chunks": [
+                {
+                    "id": c["id"],
+                    "arxiv_id": c["arxiv_id"],
+                    "title": c["title"],
+                    "chunk_index": c["chunk_index"],
+                    "content": c["content"],
+                }
+                for c in chunks
+            ],
             "retrieval_time": "{:.2f} seconds".format(chunk_end - start),
             "latency": "{:.2f} seconds".format(end - start),
         }
@@ -131,18 +144,8 @@ if __name__ == "__main__":
 
     async def run():
         retriever = Retriever()
-        questions = [
-            "What indirect auxiliary objective does ContextRL use to improve LLM grounding, and what average gains does it achieve over standard GRPO?",
-            "What is the critical screening bottleneck identified in MetaSyn, and what is the maximum recall achieved at K=200?",
-            "How does KVEraser avoid the global propagation problem of KV cache edits, and what is its latency increase compared to full recomputation?",
-            "What is the key innovation in DeepRubric's data construction pipeline, and how many GPU-hours does it save compared to prior deep research models?",
-            "What three joint stability conditions does LESS use to decide when to unmask a token, and how many fewer reverse steps does it use?",
-            "What trade-off does TokenPilot address between text sparsity and prompt caching, and by what percentage does it reduce costs in continuous mode?",
-            "According to the Value Axis paper, what happens when you steer Qwen3-8B toward low value activations, and how was the value axis constructed?",
-            "In the SearchGEO evaluation, which LLM backend achieved 0% attack success rate and which had the highest at 31.4%?",
-            "What is Expert Tying in MoE models, and what memory reduction does it achieve without significant perplexity degradation?",
-            "What monotone pattern in clinical AI failure does the hop-count taxonomy reveal, and what accuracy drop does Claude Sonnet show from hop=1 to hop=4?",
-        ]
+        with open("data/questions.json", "r") as f:
+            questions = json.load(f)
         results = []
         for q in questions:
             result = await retriever.query_rag(q)

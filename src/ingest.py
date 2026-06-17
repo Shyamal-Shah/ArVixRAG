@@ -61,7 +61,14 @@ class ArxivClient:
                     )
             except (FileNotFoundError, json.JSONDecodeError) as e:
                 logger.debug(f"Could not load metadata.json, starting fresh: {e}")
-            metadata.extend(new_metadata)
+
+            existing_ids = {p.id for p in metadata}
+            deduped = [p for p in new_metadata if p.id not in existing_ids]
+            if len(deduped) < len(new_metadata):
+                logger.debug(
+                    f"Skipped {len(new_metadata) - len(deduped)} duplicate papers"
+                )
+            metadata.extend(deduped)
             try:
                 with open(metadata_file_path, "w") as fp:
                     json.dump(
@@ -83,14 +90,8 @@ class ArxivClient:
 if __name__ == "__main__":
     arxivClient = ArxivClient()
 
-    queries = [
-        "retrieval augmented generation",
-        "large language model agents",
-        "transformer attention mechanism",
-        "instruction fine-tuning LLM",
-        "LLM-Agent Workflows",
-    ]
-
-    for q in queries:
-        results = arxivClient.ingest_papers(query=f"({q}) AND cat:cs.CL")
-        print(f"{len(results)} papers fetched for query: {q}")
+    results = arxivClient.ingest_papers(
+        query="all:transformer AND (cat:cs.AI OR cat:cs.LG OR cat:cs.CL OR cat:cs.CV)",
+        max_results=50,
+    )
+    print(f"{len(results)} papers fetched")
