@@ -21,6 +21,7 @@ class Paper:
         categories: list[str] | None = None,
         pdf_url: str | None = None,
         raw_path: str | None = None,
+        parsed_path: str | None = None,
     ):
         self.id = id
         self.title = title
@@ -31,3 +32,4 @@ class Paper:
         self.categories = categories
         self.pdf_url = pdf_url
         self.raw_path = raw_path
+        self.parsed_path = parsed_path

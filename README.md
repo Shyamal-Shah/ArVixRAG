@@ -56,3 +56,7 @@ arxivrag/
 │   └── run_ragas.py      # evaluate RAGAS on golden dataset
 └── results/              # RAGAS output
 ```
+
+### Things wrong with the Naive RAG:
+
+1. Extraction of text from PDFs is not ideal. Even after cleaning, many important parts of the text are lost, such as tables, figures, and equations. This can lead to incomplete or inaccurate responses.

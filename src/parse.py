@@ -4,6 +4,7 @@ from loguru import logger
 import pymupdf
 
 from models import Paper
+from clean import clean_text
 
 
 class PaperParser:
@@ -29,14 +30,23 @@ class PaperParser:
             raise FileNotFoundError(raw_path)
 
         output_path = self.parse_dir / f"{paper_metadata.title}.txt"
+
+        # Extract text from all pages
+        full_text = ""
         with pymupdf.open(raw_path) as pdf:
-            with open(output_path, "wb") as fp:
-                for page in pdf:
-                    text = page.get_text()
-                    if isinstance(text, str):
-                        fp.write(text.encode("utf8"))
-                        fp.write(b"\x0c")
-                paper_metadata.parsed_path = output_path.as_posix()
+            for page in pdf:
+                text = page.get_text()
+                if isinstance(text, str):
+                    full_text += text + "\n"
+
+        # Clean the extracted text
+        cleaned_text = clean_text(full_text)
+
+        # Write cleaned text to file
+        with open(output_path, "w", encoding="utf8") as fp:
+            fp.write(cleaned_text)
+
+        paper_metadata.parsed_path = output_path.as_posix()
 
     def parse_papers(self) -> list[Paper]:
         try:
