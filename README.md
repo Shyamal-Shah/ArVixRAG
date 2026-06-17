@@ -60,3 +60,7 @@ arxivrag/
 ### Things wrong with the Naive RAG:
 
 1. Extraction of text from PDFs is not ideal. Even after cleaning, many important parts of the text are lost, such as tables, figures, and equations. This can lead to incomplete or inaccurate responses.
+
+2. The chunking logic should be optimal for the use case. Currently, it is based on a fixed number of tokens, which may not be ideal for all types of documents. A more sophisticated chunking strategy could improve retrieval and response quality.
+
+3. The chunk sizes can be evaluated by running a series of queries for which we evaluate quality, and performance of various chunk sizes. This can help determine the optimal chunk size for the specific use case.
