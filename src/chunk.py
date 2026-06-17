@@ -1,12 +1,16 @@
 from pathlib import Path
-import json
 from loguru import logger
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 try:
     from .models import Paper, Chunk
+    from .persistence import load_papers, save_chunks
 except ImportError:
     from models import Paper, Chunk
+    from persistence import load_papers, save_chunks
+
+DEFAULT_CHUNK_SIZE = 512
+DEFAULT_CHUNK_OVERLAP = 50
 
 
 class TextChunker:
@@ -14,24 +18,22 @@ class TextChunker:
         self,
         metadata_path: str | None = None,
         chunks_path: str | None = None,
-        chunk_size: int = 512,
-        overlap: int = 50,
+        chunk_size: int = DEFAULT_CHUNK_SIZE,
+        overlap: int = DEFAULT_CHUNK_OVERLAP,
     ) -> None:
-        if metadata_path:
-            self.metadata_path = Path(metadata_path)
-        else:
-            self.metadata_path = Path("data", "metadata.json")
-        if chunks_path:
-            self.chunks_path = Path(chunks_path)
-        else:
-            self.chunks_path = Path("data", "chunks.json")
+        self.metadata_path = (
+            Path(metadata_path) if metadata_path else Path("data", "metadata.json")
+        )
+        self.chunks_path = (
+            Path(chunks_path) if chunks_path else Path("data", "chunks.json")
+        )
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=chunk_size,  # Maximum characters per chunk
             chunk_overlap=overlap,  # Number of overlapping characters between chunks
             length_function=len,  # Function to calculate chunk size
         )
 
-    def chunk_paper(self, paper_metadata: Paper) -> list[dict]:
+    def chunk_paper(self, paper_metadata: Paper) -> list[Chunk]:
         parsed_path = Path(paper_metadata.parsed_path or "")
         if not parsed_path.exists():
             logger.error(f"Parsed Paper: {paper_metadata.title} does not exist")
@@ -51,23 +53,10 @@ class TextChunker:
                 )
         return chunks
 
-    def chunk_papers(self):
-        try:
-            with open(self.metadata_path, "r") as fp:
-                metadata = json.load(
-                    fp, object_hook=lambda x: Paper(**x) if isinstance(x, dict) else x
-                )
-        except FileNotFoundError:
-            logger.error(f"Metadata file not found: {self.metadata_path}")
-            raise
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse metadata JSON: {e}")
-            raise
-        except Exception as e:
-            logger.error(f"Failed to parse metadata: {e}")
-            raise
+    def chunk_papers(self) -> list[Chunk]:
+        metadata = load_papers(self.metadata_path)
 
-        chunks = []
+        chunks: list[Chunk] = []
         for paper in metadata:
             try:
                 chunks.extend(self.chunk_paper(paper))
@@ -75,13 +64,7 @@ class TextChunker:
             except Exception as e:
                 logger.error(f"Failed to chunk {paper.title}: {e}")
 
-        try:
-            with open(self.chunks_path, "w") as fp:
-                json.dump(chunks, fp, indent=2, default=lambda obj: obj.__dict__)
-        except IOError as e:
-            logger.error(f"Failed to write chunks file: {e}")
-            raise
-
+        save_chunks(chunks, self.chunks_path)
         return chunks
 
 

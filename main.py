@@ -9,9 +9,9 @@ async def main():
     logger.info("Hello from arxiv-rag!")
     logger.info("Let's start by downloading some sample papers")
 
-    arxivClient = ArxivClient()
+    arxiv_client = ArxivClient()
 
-    results = arxivClient.ingest_papers(
+    results = arxiv_client.ingest_papers(
         query="cat:cs.AI OR cat:cs.LG OR cat:cs.CL OR cat:cs.CV",
         max_results=50,
     )
@@ -42,22 +42,25 @@ async def main():
 
     retriever = Retriever()
 
-    with open("data/questions.json", "r") as f:
-        questions = json.load(f)
+    try:
+        with open("data/questions.json", "r") as f:
+            questions = json.load(f)
 
-    results = []
-    for q in questions:
-        result = await retriever.query_rag(q)
-        logger.success(f"Q: {result['question']}")
-        logger.success(f"A: {result['answer']}")
-        logger.info(
-            f"Retrieval: {result['retrieval_time']} | Total: {result['latency']}"
-        )
-        results.append(result)
+        results = []
+        for q in questions:
+            result = await retriever.query_rag(q)
+            logger.success(f"Q: {result['question']}")
+            logger.success(f"A: {result['answer']}")
+            logger.info(
+                f"Retrieval: {result['retrieval_time']} | Total: {result['latency']}"
+            )
+            results.append(result)
 
-    with open("data/naive_rag_outputs.json", "w") as f:
-        json.dump(results, f, indent=2)
-    print("---")
+        with open("data/naive_rag_outputs.json", "w") as f:
+            json.dump(results, f, indent=2)
+        print("---")
+    finally:
+        await retriever.close()
 
 
 if __name__ == "__main__":

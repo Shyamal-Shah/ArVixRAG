@@ -1,57 +1,24 @@
+from dataclasses import dataclass
+
+
+@dataclass
 class Paper:
     id: str
-    title: str
-    authors: list[str] | None
-    summary: str
+    title: str = ""
+    authors: list[str] | None = None
+    summary: str = ""
     published: str | None = None
-    pdf_url: str | None
-    primary_category: str
-    categories: list[str] | None
+    primary_category: str = ""
+    categories: list[str] | None = None
+    pdf_url: str | None = None
     raw_path: str | None = None
     parsed_path: str | None = None
 
-    def __init__(
-        self,
-        id: str,
-        title: str = "",
-        authors: list[str] | None = None,
-        summary: str = "",
-        published: str = "",
-        primary_category: str = "",
-        categories: list[str] | None = None,
-        pdf_url: str | None = None,
-        raw_path: str | None = None,
-        parsed_path: str | None = None,
-    ):
-        self.id = id
-        self.title = title
-        self.authors = authors
-        self.summary = summary
-        self.published = published
-        self.primary_category = primary_category
-        self.categories = categories
-        self.pdf_url = pdf_url
-        self.raw_path = raw_path
-        self.parsed_path = parsed_path
 
-
+@dataclass
 class Chunk:
     arxiv_id: str | None = None
     paper_title: str | None = None
     chunk_index: int | None = None
     content: str | None = None
-    embeddings: list | None = None
-
-    def __init__(
-        self,
-        arxiv_id: str | None = None,
-        paper_title: str | None = None,
-        chunk_index: int | None = None,
-        content: str | None = None,
-        embeddings: list | None = None,
-    ) -> None:
-        self.arxiv_id = arxiv_id
-        self.paper_title = paper_title
-        self.chunk_index = chunk_index
-        self.content = content
-        self.embeddings = embeddings
+    embedding: list[float] | None = None

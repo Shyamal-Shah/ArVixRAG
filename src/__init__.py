@@ -12,7 +12,7 @@ from .retrieve import Retriever
 # Define package metadata
 __version__ = "0.1.0"
 
-# Explicitly declare what is available when someone uses `from arxivrag import *`
+# Explicitly declare what is available when someone uses `from src import *`
 __all__ = [
     "ArxivClient",
     "TextChunker",

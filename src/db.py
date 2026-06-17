@@ -1,10 +1,25 @@
 import os
+import re
 import asyncio
 import asyncpg
 from dotenv import load_dotenv
 from pgvector.asyncpg import register_vector
 
 load_dotenv()
+
+DEFAULT_EMBEDDING_DIMENSION = 1024
+IVFFLAT_LISTS = 100
+
+
+def _validate_identifier(name: str | None) -> str:
+    """Validate a SQL identifier (e.g. database name) against a strict allowlist.
+
+    DDL statements cannot use bind parameters, so the value is interpolated
+    directly; restricting it to a safe charset prevents injection/breakage.
+    """
+    if not name or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
+        raise ValueError(f"Invalid/unsafe SQL identifier: {name!r}")
+    return name
 
 
 class PGVectorDB:
@@ -18,11 +33,12 @@ class PGVectorDB:
         self.pool: asyncpg.Pool | None = None
 
     async def initialize(self, reset: bool = False):
-        db_name = os.environ.get("POSTGRES_DB")
-        host = os.environ.get("POSTGRES_HOST")
-        password = os.environ.get("POSTGRES_PASSWORD")
-        port = os.environ.get("POSTGRES_PORT")
-        user = os.environ.get("POSTGRES_USER")
+        db_name = _validate_identifier(os.getenv("POSTGRES_DB"))
+        host = os.getenv("POSTGRES_HOST")
+        password = os.getenv("POSTGRES_PASSWORD")
+        port = os.getenv("POSTGRES_PORT")
+        user = os.getenv("POSTGRES_USER")
+        dim = int(os.getenv("EMBEDDING_DIMENSION", str(DEFAULT_EMBEDDING_DIMENSION)))
 
         conn = await asyncpg.connect(
             user=user, password=password, database="postgres", host=host, port=port
@@ -34,10 +50,10 @@ class PGVectorDB:
                 WHERE pg_stat_activity.datname = '{db_name}'
                 AND pid <> pg_backend_pid()
             """)
-            await conn.execute(f"DROP DATABASE IF EXISTS {db_name}")
+            await conn.execute(f'DROP DATABASE IF EXISTS "{db_name}"')
 
         try:
-            await conn.execute(f"CREATE DATABASE {db_name}")
+            await conn.execute(f'CREATE DATABASE "{db_name}"')
         except asyncpg.exceptions.DuplicateDatabaseError:
             pass
 
@@ -64,39 +80,40 @@ class PGVectorDB:
         )
 
         async with self.pool.acquire() as conn:
-            await conn.execute("""
+            await conn.execute(f"""
                 CREATE TABLE IF NOT EXISTS papers (
                     id SERIAL PRIMARY KEY,
                     arxiv_id VARCHAR(120),
                     title TEXT,
                     chunk_index INTEGER,
                     content TEXT,
-                    embedding vector(1024),
+                    embedding vector({dim}),
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE (arxiv_id, chunk_index)
                 )
             """)
 
-            await conn.execute("""
+            await conn.execute(f"""
                 CREATE INDEX IF NOT EXISTS papers_embedding_idx
                 ON papers
                 USING ivfflat (embedding vector_cosine_ops)
-                WITH (lists = 100)
+                WITH (lists = {IVFFLAT_LISTS})
             """)
 
     async def close(self):
         if self.pool:
             await self.pool.close()
 
-    def get_db(self) -> asyncpg.pool.PoolAcquireContext:
-        assert self.pool is not None, "pool not initialized — call create() first"
+    def acquire(self) -> asyncpg.pool.PoolAcquireContext:
+        if self.pool is None:
+            raise RuntimeError("pool not initialized — call create() first")
         return self.pool.acquire()
 
 
 if __name__ == "__main__":
 
     async def run():
-        vectorDb = await PGVectorDB.create(reset=True)
-        await vectorDb.close()
+        vector_db = await PGVectorDB.create(reset=True)
+        await vector_db.close()
 
     asyncio.run(run())

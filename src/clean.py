@@ -1,5 +1,4 @@
 from collections import Counter
-from loguru import logger
 
 
 def clean_text(text: str, min_line_freq: int = 5) -> str:

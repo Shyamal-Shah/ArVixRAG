@@ -1,21 +1,22 @@
 from pathlib import Path
-import json
 import os
-from loguru import logger
-try:
-    from .models import Chunk
-except ImportError:
-    from models import Chunk
-import requests
 import asyncio
+from loguru import logger
+import requests
 from dotenv import load_dotenv
 
 try:
+    from .models import Chunk
     from .db import PGVectorDB
+    from .persistence import load_chunks
 except ImportError:
+    from models import Chunk
     from db import PGVectorDB
+    from persistence import load_chunks
 
 load_dotenv()
+
+DEFAULT_BATCH_SIZE = 100
 
 
 def sanitize_text(text: str | None) -> str:
@@ -27,14 +28,10 @@ def sanitize_text(text: str | None) -> str:
 
 class TextEmbedder:
 
-    def __init__(
-        self,
-        chunks_path: str | None = None,
-    ) -> None:
-        if chunks_path:
-            self.chunks_path = Path(chunks_path)
-        else:
-            self.chunks_path = Path("data", "chunks.json")
+    def __init__(self, chunks_path: str | None = None) -> None:
+        self.chunks_path = (
+            Path(chunks_path) if chunks_path else Path("data", "chunks.json")
+        )
 
     def ollama_embed(self, contents: list[str]) -> list[list[float]]:
         model = os.getenv("EMBEDDING_MODEL", "qwen3-embedding:0.6b")
@@ -57,7 +54,7 @@ class TextEmbedder:
         data = response.json()["data"]
         return [item["embedding"] for item in data]
 
-    def open_router_embed(self, contents: list[str]) -> list[list[float]]:
+    def openrouter_embed(self, contents: list[str]) -> list[list[float]]:
         api_key = os.getenv("OPENROUTER_API_KEY")
         model = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
         response = requests.post(
@@ -69,22 +66,17 @@ class TextEmbedder:
         data = response.json()["data"]
         return [item["embedding"] for item in data]
 
+    def embed(self, contents: list[str]) -> list[list[float]]:
+        """Embed a batch of texts using the configured provider."""
+        provider = os.getenv("EMBEDDING_PROVIDER", "OLLAMA").upper()
+        if provider == "OPENAI":
+            return self.openai_embed(contents)
+        elif provider == "OPENROUTER":
+            return self.openrouter_embed(contents)
+        return self.ollama_embed(contents)
+
     async def embed_chunks(self):
-        chunks: list[Chunk] = []
-        try:
-            with open(self.chunks_path, "r") as fp:
-                chunks = json.load(
-                    fp, object_hook=lambda x: Chunk(**x) if isinstance(x, dict) else x
-                )
-        except FileNotFoundError:
-            logger.error(f"Chunks file not found: {self.chunks_path}")
-            raise
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse chunk JSON: {e}")
-            raise
-        except Exception as e:
-            logger.error(f"Failed to parse chunk: {e}")
-            raise
+        chunks: list[Chunk] = load_chunks(self.chunks_path)
 
         if not chunks:
             logger.warning("No chunks loaded from JSON!")
@@ -96,25 +88,24 @@ class TextEmbedder:
 
         db = await PGVectorDB.create()
 
-        batch_size = 100
-        for batch_start in range(0, len(chunks), batch_size):
-            batch_chunks = chunks[batch_start : batch_start + batch_size]
-            batch_contents = contents[batch_start : batch_start + batch_size]
+        for batch_start in range(0, len(chunks), DEFAULT_BATCH_SIZE):
+            batch_chunks = chunks[batch_start : batch_start + DEFAULT_BATCH_SIZE]
+            batch_contents = contents[batch_start : batch_start + DEFAULT_BATCH_SIZE]
             logger.debug(
-                f"Embedding batch {batch_start // batch_size + 1} ({len(batch_chunks)} chunks)..."
+                f"Embedding batch {batch_start // DEFAULT_BATCH_SIZE + 1} ({len(batch_chunks)} chunks)..."
             )
 
-            if provider == "OPENAI":
-                embeddings_list = self.openai_embed(batch_contents)
-            elif provider == "OPENROUTER":
-                embeddings_list = self.open_router_embed(batch_contents)
-            else:
-                embeddings_list = self.ollama_embed(batch_contents)
+            embeddings_list = await asyncio.to_thread(self.embed, batch_contents)
+            if len(embeddings_list) != len(batch_contents):
+                raise ValueError(
+                    f"Provider returned {len(embeddings_list)} embeddings for "
+                    f"{len(batch_contents)} inputs"
+                )
 
             for chunk, embedding in zip(batch_chunks, embeddings_list):
-                chunk.embeddings = embedding
+                chunk.embedding = embedding
 
-            async with db.get_db() as conn:
+            async with db.acquire() as conn:
                 await conn.executemany(
                     """
                     INSERT INTO papers(arxiv_id, title, chunk_index, content, embedding)
@@ -127,14 +118,16 @@ class TextEmbedder:
                             sanitize_text(c.paper_title),
                             c.chunk_index,
                             sanitize_text(c.content),
-                            c.embeddings,
+                            c.embedding,
                         )
                         for c in batch_chunks
                     ],
                 )
-                logger.info(f"Inserted batch ending at chunk {batch_start + len(batch_chunks)}")
+                logger.info(
+                    f"Inserted batch ending at chunk {batch_start + len(batch_chunks)}"
+                )
 
-        async with db.get_db() as conn:
+        async with db.acquire() as conn:
             count = await conn.fetchval("SELECT COUNT(*) FROM papers")
             logger.info(f"Total rows in db: {count}")
 

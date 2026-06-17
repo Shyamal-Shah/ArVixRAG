@@ -1,14 +1,15 @@
 from pathlib import Path
-import json
 from loguru import logger
 import pymupdf
 
 try:
     from .models import Paper
     from .clean import clean_text
+    from .persistence import load_papers, save_papers, safe_filename
 except ImportError:
     from models import Paper
     from clean import clean_text
+    from persistence import load_papers, save_papers, safe_filename
 
 
 class PaperParser:
@@ -17,23 +18,19 @@ class PaperParser:
         metadata_path: str | None = None,
         parse_dir: str | None = None,
     ) -> None:
-        if metadata_path:
-            self.metadata_path = Path(metadata_path)
-        else:
-            self.metadata_path = Path("data", "metadata.json")
-        if parse_dir:
-            self.parse_dir = Path(parse_dir)
-        else:
-            self.parse_dir = Path("data", "text")
+        self.metadata_path = (
+            Path(metadata_path) if metadata_path else Path("data", "metadata.json")
+        )
+        self.parse_dir = Path(parse_dir) if parse_dir else Path("data", "text")
         self.parse_dir.mkdir(parents=True, exist_ok=True)
 
-    def parse_paper(self, paper_metadata: Paper):
+    def parse_paper(self, paper_metadata: Paper) -> None:
         raw_path = Path(paper_metadata.raw_path or "")
         if not raw_path.exists():
             logger.error(f"Paper: {paper_metadata.title} does not exist")
             raise FileNotFoundError(raw_path)
 
-        output_path = self.parse_dir / f"{paper_metadata.title}.txt"
+        output_path = self.parse_dir / f"{safe_filename(paper_metadata.id)}.txt"
 
         # Extract text from all pages
         full_text = ""
@@ -53,47 +50,16 @@ class PaperParser:
         paper_metadata.parsed_path = output_path.as_posix()
 
     def parse_papers(self) -> list[Paper]:
-        try:
-            with open(self.metadata_path, "r") as fp:
-                metadata = json.load(
-                    fp, object_hook=lambda x: Paper(**x) if isinstance(x, dict) else x
-                )
-        except FileNotFoundError:
-            logger.error(f"Metadata file not found: {self.metadata_path}")
-            raise
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse metadata JSON: {e}")
-            raise
-        except Exception as e:
-            logger.error(f"Failed to parse metadata: {e}")
-            raise
+        metadata = load_papers(self.metadata_path)
 
         for paper in metadata:
             try:
                 self.parse_paper(paper)
                 logger.info(f"Parsed paper: {paper.title}")
-
             except Exception as e:
                 logger.error(f"Failed to parse {paper.title}: {e}")
 
-        try:
-            with open(self.metadata_path, "w") as fp:
-                json.dump(
-                    metadata,
-                    fp,
-                    indent=2,
-                    default=lambda obj: obj.__dict__,
-                )
-        except FileNotFoundError:
-            logger.error(f"Metadata file not found: {self.metadata_path}")
-            raise
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse metadata JSON: {e}")
-            raise
-        except Exception as e:
-            logger.error(f"Failed to parse metadata: {e}")
-            raise
-
+        save_papers(metadata, self.metadata_path)
         return metadata
 
 
