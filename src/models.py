@@ -33,3 +33,25 @@ class Paper:
         self.pdf_url = pdf_url
         self.raw_path = raw_path
         self.parsed_path = parsed_path
+
+
+class Chunk:
+    arxiv_id: str | None = None
+    paper_title: str | None = None
+    chunk_index: int | None = None
+    content: str | None = None
+    embeddings: list | None = None
+
+    def __init__(
+        self,
+        arxiv_id: str | None = None,
+        paper_title: str | None = None,
+        chunk_index: int | None = None,
+        content: str | None = None,
+        embeddings: list | None = None,
+    ) -> None:
+        self.arxiv_id = arxiv_id
+        self.paper_title = paper_title
+        self.chunk_index = chunk_index
+        self.content = content
+        self.embeddings = embeddings

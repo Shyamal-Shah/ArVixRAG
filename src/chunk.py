@@ -3,7 +3,7 @@ import json
 from loguru import logger
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from models import Paper
+from models import Paper, Chunk
 
 
 class TextChunker:
@@ -39,12 +39,12 @@ class TextChunker:
             texts = self.text_splitter.split_text(fp.read())
             for i, text in enumerate(texts):
                 chunks.append(
-                    {
-                        "arxiv_id": paper_metadata.id,
-                        "paper_title": paper_metadata.title,
-                        "chunk_index": i,
-                        "chunk_text": text,
-                    }
+                    Chunk(
+                        arxiv_id=paper_metadata.id,
+                        paper_title=paper_metadata.title,
+                        chunk_index=i,
+                        content=text,
+                    )
                 )
         return chunks
 
