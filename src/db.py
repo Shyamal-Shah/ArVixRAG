@@ -87,7 +87,7 @@ class PGVectorDB:
         if self.pool:
             await self.pool.close()
 
-    def get_db(self):
+    def get_db(self) -> asyncpg.pool.PoolAcquireContext:
         assert self.pool is not None, "pool not initialized — call create() first"
         return self.pool.acquire()
 

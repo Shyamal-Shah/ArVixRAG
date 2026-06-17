@@ -88,12 +88,17 @@ class TextEmbedder:
         provider = os.getenv("EMBEDDING_PROVIDER", "OLLAMA").upper()
         logger.info(f"Embedding {len(chunks)} chunks using {provider}...")
 
-        if provider == "OPENAI":
-            embeddings_list = self.openai_embed(contents)
-        elif provider == "OPENROUTER":
-            embeddings_list = self.open_router_embed(contents)
-        else:
-            embeddings_list = self.ollama_embed(contents)
+        embeddings_list = []
+        batch_size = 100
+        for batch_start in range(0, len(contents), batch_size):
+            batch = contents[batch_start : batch_start + batch_size]
+            logger.debug(f"Embedding batch {batch_start // batch_size + 1} ({len(batch)} chunks)...")
+            if provider == "OPENAI":
+                embeddings_list.extend(self.openai_embed(batch))
+            elif provider == "OPENROUTER":
+                embeddings_list.extend(self.open_router_embed(batch))
+            else:
+                embeddings_list.extend(self.ollama_embed(batch))
 
         for chunk, embedding in zip(chunks, embeddings_list):
             chunk.embeddings = embedding
